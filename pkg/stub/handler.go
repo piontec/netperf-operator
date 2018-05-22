@@ -2,6 +2,7 @@ package stub
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/piontec/netperf-operator/pkg/apis/app/v1alpha1"
 
@@ -33,6 +34,9 @@ func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {
 		if pod.ObjectMeta.OwnerReferences[0].Kind != "Netperf" {
 			return nil
 		}
+		if pod.ObjectMeta.OwnerReferences[0].UID == "" {
+			logrus.Warnf("Pod %s/%s has owner of type Netperf, but UIS is unknown", pod.Namespace, pod.Name)
+		}
 		logrus.Debugf("New pod event: %s/%s, deleted status: %v", pod.Namespace, pod.Name, event.Deleted)
 		return h.handlePodUpdateEvent(pod)
 	default:
@@ -51,8 +55,6 @@ func (h *Handler) handleNetperfUpdateEvent(cr *v1alpha1.Netperf) error {
 	switch cr.Status.Status {
 	case v1alpha1.NetperfPhaseInitial:
 		return h.startServerPod(cr)
-	case v1alpha1.NetperfPhaseServer:
-		return h.startClientPod(cr)
 	default:
 		logrus.Debugf("Nothing needed to do for update even on Netperf %s in state %s",
 			cr.Name, cr.Status.Status)
@@ -118,40 +120,63 @@ func (h *Handler) registerNetperfServer(cr *v1alpha1.Netperf, serverPod *v1.Pod)
 
 func (h *Handler) handlePodUpdateEvent(pod *v1.Pod) error {
 	logrus.Debugf("Trying to bind the pod %s with CR", pod.Name)
-	// var serverPodOwner *NetperfInfo = nil
+	cr := v1alpha1.Netperf{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Netperf",
+			APIVersion: "v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pod.OwnerReferences[0].Name,
+			Namespace: pod.Namespace,
+		},
+	}
+	if err := sdk.Get(&cr); err != nil {
+		return fmt.Errorf("error trying to fetch Netperf object %s/%s defined as owner of pod %s/%s",
+			pod.Namespace, pod.OwnerReferences[0].Name, pod.Namespace, pod.Name)
+	}
 
-	// for _, info := range h.infos {
-	// 	if pod.OwnerReferences[0].UID != info.customResource.UID {
-	// 		continue
-	// 	}
-	// 	if info.clientPod != nil && pod.UID == info.clientPod.UID {
-	// 		logrus.Debugf("This is client pod event for CR %s: pod phase: %s, pod IP: %s",
-	// 			info.customResource.Name, pod.Status.Phase, pod.Status.PodIP)
-	// 	}
-	// 	if pod.UID == info.serverPod.UID {
-	// 		logrus.Debugf("This is server pod event for CR %s: pod phase: %s, pod IP: %s",
-	// 			info.customResource.Name, pod.Status.Phase, pod.Status.PodIP)
-	// 		if pod.Status.Phase == v1.PodRunning {
-	// 			logrus.Infof("Server pod %s is running with IP %s, starting client pod",
-	// 				pod.Name, pod.Status.PodIP)
-	// 			serverPodOwner = &info
-	// 			break
-	// 		}
-	// 	}
-	// }
+	isServerPod := pod.UID == cr.Status.ServerPod
+	isClientPod := pod.UID == cr.Status.ClientPod
+	if !isServerPod && !isClientPod {
+		return fmt.Errorf("pod with UID %s was not detected as server nor client pod of the CR",
+			pod.UID)
+	}
 
-	// if serverPodOwner != nil {
-	// 	clientPod := h.newNetperfPod(serverPodOwner.customResource, "netperf-client", []string{"netperf", "-H", pod.Status.PodIP})
+	if isClientPod {
+		logrus.Debugf("This is client pod event for CR %s: pod phase: %s, pod IP: %s",
+			cr.Name, pod.Status.Phase, pod.Status.PodIP)
+	}
+	if isServerPod {
+		logrus.Debugf("This is server pod event for CR %s: pod phase: %s, pod IP: %s",
+			cr.Name, pod.Status.Phase, pod.Status.PodIP)
+		return h.handleServerPodEvent(&cr, pod)
+	}
 
-	// 	err := sdk.Create(clientPod)
-	// 	if err != nil && !errors.IsAlreadyExists(err) {
-	// 		logrus.Errorf("Failed to create client pod : %v", err)
-	// 		return err
-	// 	}
+	return nil
+}
 
-	// 	serverPodOwner.clientPod = clientPod
-	// 	logrus.Debug("New server pod started and registered for netperf: %s", serverPodOwner.customResource.Name)
-	// 	return nil
-	// }
+func (h *Handler) handleServerPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error {
+
+	if pod.Status.Phase != "Running" {
+		logrus.Debugf("Server pod is not running yet")
+		return nil
+	}
+
+	if cr.Status.ClientPod != "" {
+		logrus.Debugf("It seems client pod as already created, skipping creation")
+		return nil
+	}
+
+	clientPod := h.newNetperfPod(cr, "netperf-client", []string{"netperf", "-H", pod.Status.PodIP})
+	err := sdk.Create(clientPod)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		logrus.Errorf("Failed to create client pod : %v", err)
+		return err
+	}
+	logrus.Debugf("New client pod started: %s/s", clientPod.Namespace, clientPod.Name)
+	cr.Status.ClientPod = clientPod.UID
+	sdk.Update(cr)
+	logrus.Debugf("Custom resource %s updated", cr.Name)
+
 	return nil
 }

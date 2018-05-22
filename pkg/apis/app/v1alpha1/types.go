@@ -7,8 +7,8 @@ import (
 
 const (
 	NetperfPhaseInitial = ""
-	NetperfPhaseServer  = "Started Server"
-	NetperfPhaseTest    = "Started Test"
+	NetperfPhaseServer  = "Created server pod"
+	NetperfPhaseTest    = "Created client pod"
 	NetperfPhaseDone    = "Done"
 )
 
