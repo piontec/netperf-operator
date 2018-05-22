@@ -1,0 +1,41 @@
+package v1alpha1
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+)
+
+const (
+	NetperfPhaseInitial = ""
+	NetperfPhaseServer  = "Started Server"
+	NetperfPhaseTest    = "Started Test"
+	NetperfPhaseDone    = "Done"
+)
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type NetperfList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+	Items           []Netperf `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type Netperf struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Spec              NetperfSpec   `json:"spec"`
+	Status            NetperfStatus `json:"status,omitempty"`
+}
+
+type NetperfSpec struct {
+	ServerNode string `json:"server"`
+	ClientNode string `json:"client"`
+}
+type NetperfStatus struct {
+	Status          string    `json:"status`
+	ServerPod       types.UID `json:"server_pod_uid"`
+	ClientPod       types.UID `json:"server_pod_uid"`
+	SpeedBitsPerSec int64     `json:"speed_bit_per_sec"`
+}
