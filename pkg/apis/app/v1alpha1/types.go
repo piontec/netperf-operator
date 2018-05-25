@@ -2,7 +2,6 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -34,8 +33,8 @@ type NetperfSpec struct {
 	ClientNode string `json:"client"`
 }
 type NetperfStatus struct {
-	Status          string    `json:"status`
-	ServerPod       types.UID `json:"server_pod_uid"`
-	ClientPod       types.UID `json:"server_pod_uid"`
-	SpeedBitsPerSec int64     `json:"speed_bit_per_sec"`
+	Status          string `json:"status`
+	ServerPod       string `json:"server_pod"`
+	ClientPod       string `json:"server_pod"`
+	SpeedBitsPerSec int64  `json:"speed_bit_per_sec"`
 }

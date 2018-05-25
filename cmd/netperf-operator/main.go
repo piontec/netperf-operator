@@ -19,6 +19,7 @@ func printVersion() {
 }
 
 func main() {
+	logrus.SetLevel(logrus.DebugLevel)
 	printVersion()
 
 	resource := "app.example.com/v1alpha1"
