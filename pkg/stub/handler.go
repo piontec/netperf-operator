@@ -121,9 +121,10 @@ func (h *Handler) newNetperfPod(cr *v1alpha1.Netperf, name, netperfType string, 
 }
 
 func (h *Handler) registerNetperfServer(cr *v1alpha1.Netperf, serverPod *v1.Pod) error {
-	cr.Status.Status = v1alpha1.NetperfPhaseServer
-	cr.Status.ServerPod = serverPod.Name
-	return sdk.Update(cr)
+	c := cr.DeepCopy()
+	c.Status.Status = v1alpha1.NetperfPhaseServer
+	c.Status.ServerPod = serverPod.Name
+	return sdk.Update(c)
 }
 
 func (h *Handler) handlePodUpdateEvent(pod *v1.Pod) error {
@@ -182,8 +183,9 @@ func (h *Handler) handleServerPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error 
 		return err
 	}
 	logrus.Debugf("New client pod started: %s/s", clientPod.Namespace, clientPod.Name)
-	cr.Status.ClientPod = clientPod.Name
-	sdk.Update(cr)
+	c := cr.DeepCopy()
+	c.Status.ClientPod = clientPod.Name
+	sdk.Update(c)
 	logrus.Debugf("Custom resource %s updated", cr.Name)
 
 	return nil
