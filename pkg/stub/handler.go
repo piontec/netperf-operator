@@ -140,8 +140,8 @@ func (h *Handler) handlePodUpdateEvent(pod *v1.Pod) error {
 		},
 	}
 	if err := sdk.Get(cr); err != nil {
-		return fmt.Errorf("error trying to fetch Netperf object %s/%s defined as owner of pod %s/%s",
-			pod.Namespace, pod.OwnerReferences[0].Name, pod.Namespace, pod.Name)
+		return fmt.Errorf("error trying to fetch Netperf object %s/%s defined as owner of pod %s/%s: %v",
+			pod.Namespace, pod.OwnerReferences[0].Name, pod.Namespace, pod.Name, err)
 	}
 
 	isServerPod := pod.Name == cr.Status.ServerPod
@@ -184,6 +184,7 @@ func (h *Handler) handleServerPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error 
 	}
 	logrus.Debugf("New client pod started: %s/s", clientPod.Namespace, clientPod.Name)
 	c := cr.DeepCopy()
+	c.Status.Status = v1alpha1.NetperfPhaseTest
 	c.Status.ClientPod = clientPod.Name
 	sdk.Update(c)
 	logrus.Debugf("Custom resource %s updated", cr.Name)
