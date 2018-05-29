@@ -2,7 +2,6 @@ package stub
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/piontec/netperf-operator/pkg/apis/app/v1alpha1"
 
@@ -29,7 +28,7 @@ type Handler struct {
 func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
 	case *v1alpha1.Netperf:
-		logrus.Debugf("New Netperf event, name: %s, deleted: %v", o.Name, event.Deleted)
+		logrus.Debugf("New Netperf event, name: %s, deleted: %v, status: %v", o.Name, event.Deleted, o.Status.Status)
 		if event.Deleted {
 			return h.deleteNetperfPods(o)
 		}
@@ -63,7 +62,7 @@ func (h *Handler) handleNetperfUpdateEvent(cr *v1alpha1.Netperf) error {
 	case v1alpha1.NetperfPhaseServer:
 		return h.startServerPod(cr)
 	default:
-		logrus.Debugf("Nothing needed to do for update even on Netperf %s in state %s",
+		logrus.Debugf("Nothing needed to do for update event on Netperf %s in state %s",
 			cr.Name, cr.Status.Status)
 		return nil
 	}
@@ -77,11 +76,20 @@ func (h *Handler) startServerPod(cr *v1alpha1.Netperf) error {
 		logrus.Errorf("Failed to create server pod : %v", err)
 		return err
 	}
+	if err != nil && errors.IsAlreadyExists(err) {
+		logrus.Debugf("Server pod is already created for netperf: %v", cr.Name)
+		if cr.Status.ServerPod == serverPod.Name {
+			logrus.Debugf("Server pod %v already registered for netperf %v", serverPod.Name,
+				cr.Name)
+			return nil
+		}
+	} else {
+		logrus.Debugf("New server pod started for netperf: %s", cr.Name)
+	}
 
 	if err := h.registerNetperfServer(cr, serverPod); err != nil {
 		return err
 	}
-	logrus.Debug("New server pod started and registered for netperf: %s", cr.Name)
 	return nil
 }
 
@@ -140,25 +148,41 @@ func (h *Handler) handlePodUpdateEvent(pod *v1.Pod) error {
 		},
 	}
 	if err := sdk.Get(cr); err != nil {
-		return fmt.Errorf("error trying to fetch Netperf object %s/%s defined as owner of pod %s/%s: %v",
+		logrus.Errorf("error trying to fetch Netperf object %s/%s defined as owner of pod %s/%s: %v",
 			pod.Namespace, pod.OwnerReferences[0].Name, pod.Namespace, pod.Name, err)
+		return nil
 	}
 
 	isServerPod := pod.Name == cr.Status.ServerPod
 	isClientPod := pod.Name == cr.Status.ClientPod
 	if !isServerPod && !isClientPod {
-		return fmt.Errorf("pod with UID %s was not detected as server nor client pod of the CR",
+		logrus.Errorf("pod with UID %s was not detected as server nor client pod of the CR",
 			pod.UID)
+		return nil
 	}
 
 	if isClientPod {
 		logrus.Debugf("This is client pod event for CR %s: pod phase: %s, pod IP: %s",
 			cr.Name, pod.Status.Phase, pod.Status.PodIP)
+		return h.handleClientPodEvent(cr, pod)
 	}
 	if isServerPod {
 		logrus.Debugf("This is server pod event for CR %s: pod phase: %s, pod IP: %s",
 			cr.Name, pod.Status.Phase, pod.Status.PodIP)
 		return h.handleServerPodEvent(cr, pod)
+	}
+
+	return nil
+}
+
+func (h *Handler) handleClientPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error {
+	if pod.Status.Phase == "Running" {
+		logrus.Debugf("Client pod is running")
+		return nil
+	}
+
+	if pod.Status.Phase == "Completed" {
+		logrus.Debugf("test completed")
 	}
 
 	return nil
@@ -176,18 +200,28 @@ func (h *Handler) handleServerPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error 
 		return nil
 	}
 
+	logrus.Debugf("Creating client pod for netperf: %v", cr.Name)
 	clientPod := h.newNetperfPod(cr, "netperf-client", NetperfTypeClient, []string{"netperf", "-H", pod.Status.PodIP})
 	err := sdk.Create(clientPod)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logrus.Errorf("Failed to create client pod : %v", err)
 		return err
 	}
-	logrus.Debugf("New client pod started: %s/s", clientPod.Namespace, clientPod.Name)
+	if err != nil && errors.IsAlreadyExists(err) {
+		logrus.Debugf("client pod already created for netperf: %s", cr.Name)
+		if cr.Status.ClientPod == clientPod.Name {
+			logrus.Debugf("Client pod %v already registered with netperf %v", clientPod.Name,
+				cr.Name)
+			return nil
+		}
+	} else {
+		logrus.Debugf("New client pod started: %s/%s", clientPod.Namespace, clientPod.Name)
+	}
 	c := cr.DeepCopy()
 	c.Status.Status = v1alpha1.NetperfPhaseTest
 	c.Status.ClientPod = clientPod.Name
 	sdk.Update(c)
-	logrus.Debugf("Custom resource %s updated", cr.Name)
+	logrus.Debugf("Custom resource %s updated with client pod info: %s", cr.Name, clientPod.Name)
 
 	return nil
 }
