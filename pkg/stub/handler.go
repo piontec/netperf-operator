@@ -1,7 +1,9 @@
 package stub
 
 import (
+	"bytes"
 	"context"
+	"os"
 
 	"github.com/piontec/netperf-operator/pkg/apis/app/v1alpha1"
 
@@ -11,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
@@ -69,7 +73,7 @@ func (h *Handler) handleNetperfUpdateEvent(cr *v1alpha1.Netperf) error {
 }
 
 func (h *Handler) startServerPod(cr *v1alpha1.Netperf) error {
-	serverPod := h.newNetperfPod(cr, "netperf-server", NetperfTypeServer, []string{})
+	serverPod := h.newNetperfPod(cr, "netperf-server", NetperfTypeServer, v1.RestartPolicyAlways, []string{})
 
 	err := sdk.Create(serverPod)
 	if err != nil && !errors.IsAlreadyExists(err) {
@@ -93,7 +97,7 @@ func (h *Handler) startServerPod(cr *v1alpha1.Netperf) error {
 	return nil
 }
 
-func (h *Handler) newNetperfPod(cr *v1alpha1.Netperf, name, netperfType string, command []string) *v1.Pod {
+func (h *Handler) newNetperfPod(cr *v1alpha1.Netperf, name, netperfType string, restartPolicy v1.RestartPolicy, command []string) *v1.Pod {
 	labels := map[string]string{
 		"app":          "netperf-operator",
 		"netperf-type": netperfType,
@@ -123,6 +127,7 @@ func (h *Handler) newNetperfPod(cr *v1alpha1.Netperf, name, netperfType string, 
 					Command: command,
 				},
 			},
+			RestartPolicy: restartPolicy,
 		},
 	}
 	return pod
@@ -176,21 +181,48 @@ func (h *Handler) handlePodUpdateEvent(pod *v1.Pod) error {
 }
 
 func (h *Handler) handleClientPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error {
-	if pod.Status.Phase == "Running" {
+	if pod.Status.Phase == v1.PodRunning {
 		logrus.Debugf("Client pod is running")
 		return nil
 	}
 
-	if pod.Status.Phase == "Completed" {
-		logrus.Debugf("test completed")
+	if pod.Status.Phase == v1.PodSucceeded {
+		res := h.getLogFromClientPod(pod)
+		logrus.Debugf("***test completed: %s", res)
 	}
 
 	return nil
 }
 
-func (h *Handler) handleServerPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error {
+func (h *Handler) getLogFromClientPod(pod *v1.Pod) string {
+	var kubeconfig string
+	if home := os.Getenv("HOME"); home != "" {
+		kubeconfig = "/home/piontec/.kube/config"
+	}
+	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		logrus.Errorf("Wrong config: %v", err)
+	}
+	client, err := corev1client.NewForConfig(cfg)
+	if err != nil {
+		logrus.Errorf("Client error: %v", err)
+	}
+	logOptions := &v1.PodLogOptions{}
+	req := client.Pods("default").GetLogs("netperf-client", logOptions)
+	rc, err := req.Stream()
+	if err != nil {
+		logrus.Errorf("Client error: %v", err)
+	}
+	defer rc.Close()
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(rc)
+	s := buf.String()
+	return s
+}
 
-	if pod.Status.Phase != "Running" {
+func (h *Handler) handleServerPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error {
+	//pods := cv1.Pods
+	if pod.Status.Phase != v1.PodRunning {
 		logrus.Debugf("Server pod is not running yet")
 		return nil
 	}
@@ -201,7 +233,7 @@ func (h *Handler) handleServerPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error 
 	}
 
 	logrus.Debugf("Creating client pod for netperf: %v", cr.Name)
-	clientPod := h.newNetperfPod(cr, "netperf-client", NetperfTypeClient, []string{"netperf", "-H", pod.Status.PodIP})
+	clientPod := h.newNetperfPod(cr, "netperf-client", NetperfTypeClient, v1.RestartPolicyOnFailure, []string{"netperf", "-H", pod.Status.PodIP})
 	err := sdk.Create(clientPod)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logrus.Errorf("Failed to create client pod : %v", err)
