@@ -29,12 +29,12 @@ type Netperf struct {
 }
 
 type NetperfSpec struct {
-	ServerNode string `json:"server"`
-	ClientNode string `json:"client"`
+	ServerNode string `json:"serverNode"`
+	ClientNode string `json:"clientNode"`
 }
 type NetperfStatus struct {
-	Status          string `json:"status`
-	ServerPod       string `json:"server_pod"`
-	ClientPod       string `json:"client_pod"`
-	SpeedBitsPerSec int64  `json:"speed_bit_per_sec"`
+	Status          string  `json:"status"`
+	ServerPod       string  `json:"serverPod"`
+	ClientPod       string  `json:"clientPod"`
+	SpeedBitsPerSec float64 `json:"speedBitsPerSec"`
 }

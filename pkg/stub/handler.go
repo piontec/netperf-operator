@@ -3,7 +3,10 @@ package stub
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/piontec/netperf-operator/pkg/apis/app/v1alpha1"
 
@@ -186,12 +189,52 @@ func (h *Handler) handleClientPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error 
 		return nil
 	}
 
-	if pod.Status.Phase == v1.PodSucceeded {
+	if pod.Status.Phase == v1.PodSucceeded && cr.Status.Status != v1alpha1.NetperfPhaseDone {
+		logrus.Debugf("Test completed, parsing results")
 		res := h.getLogFromClientPod(pod)
-		logrus.Debugf("***test completed: %s", res)
+		lines := strings.Split(res, "\n")
+		entries := strings.Fields(lines[6])
+		throughput, convErr := strconv.ParseFloat(entries[4], 64)
+		if convErr != nil {
+			return fmt.Errorf("error trying to convert result \"%s\" to float: %v", entries[4], convErr)
+		}
+
+		serverPod, err := h.getPodByName(cr.Status.ServerPod, cr.Namespace)
+		if err != nil {
+			logrus.Errorf("Error fetching pod %v by name: %v. Won't delete Netperf.", cr.Status.ServerPod, err)
+			return err
+		}
+		logrus.Debug("Test completed, deleting resources")
+		if err = sdk.Delete(pod); err != nil {
+			logrus.Debugf("Error deleting client pod %v: %v", pod.Name, err)
+			return err
+		}
+		if err = sdk.Delete(serverPod); err != nil {
+			logrus.Debugf("Error deleting server pod %v: %v", serverPod.Name, err)
+			return err
+		}
+		netperf := cr.DeepCopy()
+		netperf.Status.SpeedBitsPerSec = throughput
+		netperf.Status.Status = v1alpha1.NetperfPhaseDone
+		return sdk.Update(netperf)
 	}
 
 	return nil
+}
+
+func (h *Handler) getPodByName(name, namespace string) (*v1.Pod, error) {
+	pod := &v1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	err := sdk.Get(pod)
+	return pod, err
 }
 
 func (h *Handler) getLogFromClientPod(pod *v1.Pod) string {
