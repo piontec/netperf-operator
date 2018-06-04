@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -76,7 +77,7 @@ func (h *Handler) handleNetperfUpdateEvent(cr *v1alpha1.Netperf) error {
 }
 
 func (h *Handler) startServerPod(cr *v1alpha1.Netperf) error {
-	serverPod := h.newNetperfPod(cr, "netperf-server", NetperfTypeServer, v1.RestartPolicyAlways, []string{})
+	serverPod := h.newNetperfPod(cr, NetperfTypeServer, v1.RestartPolicyAlways, []string{})
 
 	err := sdk.Create(serverPod)
 	if err != nil && !errors.IsAlreadyExists(err) {
@@ -100,7 +101,16 @@ func (h *Handler) startServerPod(cr *v1alpha1.Netperf) error {
 	return nil
 }
 
-func (h *Handler) newNetperfPod(cr *v1alpha1.Netperf, name, netperfType string, restartPolicy v1.RestartPolicy, command []string) *v1.Pod {
+func (h *Handler) newNetperfPod(cr *v1alpha1.Netperf, netperfType string, restartPolicy v1.RestartPolicy, command []string) *v1.Pod {
+	var name string
+	guidString := fmt.Sprint(cr.UID)
+	suffix := strings.Split(guidString, "-")[4]
+	switch netperfType {
+	case NetperfTypeClient:
+		name = "netperf-client-" + suffix
+	case NetperfTypeServer:
+		name = "netperf-server-" + suffix
+	}
 	labels := map[string]string{
 		"app":          "netperf-operator",
 		"netperf-type": netperfType,
@@ -238,9 +248,10 @@ func (h *Handler) getPodByName(name, namespace string) (*v1.Pod, error) {
 }
 
 func (h *Handler) getLogFromClientPod(pod *v1.Pod) string {
+	//FIXME: replace this with some call through operator SDK to use existing pooled connection
 	var kubeconfig string
 	if home := os.Getenv("HOME"); home != "" {
-		kubeconfig = "/home/piontec/.kube/config"
+		kubeconfig = filepath.Join(home, ".kube/config")
 	}
 	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
@@ -251,7 +262,7 @@ func (h *Handler) getLogFromClientPod(pod *v1.Pod) string {
 		logrus.Errorf("Client error: %v", err)
 	}
 	logOptions := &v1.PodLogOptions{}
-	req := client.Pods("default").GetLogs("netperf-client", logOptions)
+	req := client.Pods(pod.Namespace).GetLogs(pod.Name, logOptions)
 	rc, err := req.Stream()
 	if err != nil {
 		logrus.Errorf("Client error: %v", err)
@@ -264,7 +275,6 @@ func (h *Handler) getLogFromClientPod(pod *v1.Pod) string {
 }
 
 func (h *Handler) handleServerPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error {
-	//pods := cv1.Pods
 	if pod.Status.Phase != v1.PodRunning {
 		logrus.Debugf("Server pod is not running yet")
 		return nil
@@ -276,7 +286,7 @@ func (h *Handler) handleServerPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error 
 	}
 
 	logrus.Debugf("Creating client pod for netperf: %v", cr.Name)
-	clientPod := h.newNetperfPod(cr, "netperf-client", NetperfTypeClient, v1.RestartPolicyOnFailure, []string{"netperf", "-H", pod.Status.PodIP})
+	clientPod := h.newNetperfPod(cr, NetperfTypeClient, v1.RestartPolicyOnFailure, []string{"netperf", "-H", pod.Status.PodIP})
 	err := sdk.Create(clientPod)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logrus.Errorf("Failed to create client pod : %v", err)
