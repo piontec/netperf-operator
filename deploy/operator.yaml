@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: netperf-operator
-          image: localhost:30500/test:2
+          image: my.repo.url/netperf-operator:v0.0.1
           command:
           - netperf-operator
           imagePullPolicy: Always
