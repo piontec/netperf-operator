@@ -101,7 +101,7 @@ func (h *Handler) startServerPod(cr *v1alpha1.Netperf) error {
 	return nil
 }
 
-func (h *Handler) getPodAffinity(cr *v1alpha1.Netperf, netperfType string) *v1.Affinity {
+func (h *Handler) getNetperfPodAffinity(cr *v1alpha1.Netperf, netperfType string) *v1.Affinity {
 	if (netperfType == NetperfTypeClient && cr.Spec.ClientNode == "") ||
 		(netperfType == NetperfTypeServer && cr.Spec.ServerNode == "") {
 		return nil
@@ -122,8 +122,8 @@ func (h *Handler) getPodAffinity(cr *v1alpha1.Netperf, netperfType string) *v1.A
 					{
 						MatchExpressions: []v1.NodeSelectorRequirement{
 							{
-								Key:      "TODO",
-								Operator: "equals",
+								Key:      "kubernetes.io/hostname",
+								Operator: "In",
 								Values:   []string{nodeName},
 							},
 						},
@@ -149,6 +149,7 @@ func (h *Handler) getNetperfPodName(cr *v1alpha1.Netperf, netperfType string) st
 
 func (h *Handler) newNetperfPod(cr *v1alpha1.Netperf, netperfType string, restartPolicy v1.RestartPolicy, command []string) *v1.Pod {
 	name := h.getNetperfPodName(cr, netperfType)
+	affinity := h.getNetperfPodAffinity(cr, netperfType)
 	labels := map[string]string{
 		"app":          "netperf-operator",
 		"netperf-type": netperfType,
@@ -179,6 +180,7 @@ func (h *Handler) newNetperfPod(cr *v1alpha1.Netperf, netperfType string, restar
 				},
 			},
 			RestartPolicy: restartPolicy,
+			Affinity:      affinity,
 		},
 	}
 	return pod
