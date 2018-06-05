@@ -57,7 +57,7 @@ export WATCH_NAMESPACE=default
 Still, if you're using VS Code with go plugin (which I highly recommend), I incuded in the repo my `launch.json` file. Skip the manual steps above, open the project, set your environment variables in the `launch.json` file and hit `F5` in VS Code - you're ready to go.
 
 ### <a name="dev-incluster"></a> Running inside a cluster
-The simplest way is through [installing the operator sdk(https://github.com/operator-framework/operator-sdk#quick-start)]. You also need an image repository, where you can store the ready image:
+The simplest way is through [installing the operator sdk](https://github.com/operator-framework/operator-sdk#quick-start). You also need an image repository, where you can store the ready image:
 ```bash
 export IMAGE=my.repo.url/netperf-operator:v0.0.1
 ```
