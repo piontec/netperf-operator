@@ -17,4 +17,4 @@ install:
 
 script:
   - VER=`grep "const version = " cmd/netperf-operator/main.go | cut -f2 -d'"'` GIT=`git rev-parse --short HEAD` CGO_ENABLED=0 GOOS=linux go build -o netperf-operator -ldflags "-X main.VersionString=v${VER}-${GIT}" cmd/netperf-operator/main.go
-  - docker build tmp/build/Dockerfile -t docker pull tailoredcloud/netperf-operator:v${VER}-${GIT}
+  - docker build -t tailoredcloud/netperf-operator:v${VER}-${GIT} tmp/build/Dockerfile
