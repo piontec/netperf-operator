@@ -1,4 +1,5 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/piontec/netperf-operator)](https://goreportcard.com/report/github.com/piontec/netperf-operator)
+[![Build status](https://travis-ci.com/piontec/netperf-operator.svg?branch=master)](https://travis-ci.com/piontec/netperf-operator.svg?branch=master)
 # Netperf operator
 This is a simple Kubernetes Operator, that uses the legendary [netperf tool](https://hewlettpackard.github.io/netperf/) to run 2 pods in your cluster and measure real TCP connection throughput between them.
 This project is an example kubernetes operator based on [Operator Framework SDK](https://github.com/operator-framework/operator-sdk). I created it for two reasons: first one, to learn how to build an operator using the SDK, second to solve a network testing problem. 
