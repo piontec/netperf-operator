@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -296,6 +297,10 @@ func (h *Handler) getLogFromClientPod(pod *v1.Pod) string {
 	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		logrus.Errorf("Wrong config: %v", err)
+		cfg, err = rest.InClusterConfig()
+		if err != nil {
+			panic(err.Error())
+		}
 	}
 	client, err := corev1client.NewForConfig(cfg)
 	if err != nil {

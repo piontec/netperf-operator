@@ -12,12 +12,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const version = "0.1.0"
+const version = "0.1.1"
 
 func printVersion() {
 	logrus.Infof("Go Version: %s", runtime.Version())
 	logrus.Infof("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH)
 	logrus.Infof("operator-sdk Version: %v", sdkVersion.Version)
+	logrus.Infof("Netperf-operator Version: %v", version)
 }
 
 func main() {
