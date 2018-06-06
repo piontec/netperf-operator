@@ -1,4 +1,9 @@
+sudo: required
+
 language: go
+
+services:
+  - docker
 
 go:  
   - "1.10.1"
@@ -11,4 +16,5 @@ install:
   - dep ensure
 
 script:
-  - CGO_ENABLED=0 GOOS=linux go build -o netperf-operator cmd/netperf-operator/main.go
+  - VER=`grep "const version = " cmd/netperf-operator/main.go | cut -f2 -d'"'` GIT=`git rev-parse --short HEAD` CGO_ENABLED=0 GOOS=linux go build -o netperf-operator cmd/netperf-operator/main.go -x -ldflags "-X main.VersionString v${VER}-${GIT}"
+  - docker build tmp/build/Dockerfile

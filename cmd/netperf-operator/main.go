@@ -12,6 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const version = "0.1.0"
+
 func printVersion() {
 	logrus.Infof("Go Version: %s", runtime.Version())
 	logrus.Infof("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH)
