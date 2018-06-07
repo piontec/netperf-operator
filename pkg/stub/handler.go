@@ -22,9 +22,12 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+type netperfType string
+
 const (
-	NetperfTypeServer = "server"
-	NetperfTypeClient = "client"
+	netperfTypeServer netperfType = "server"
+	netperfTypeClient netperfType = "client"
+	netperfImage                  = "tailoredcloud/netperf:v2.7"
 )
 
 func NewHandler() sdk.Handler {
@@ -78,7 +81,7 @@ func (h *Handler) handleNetperfUpdateEvent(cr *v1alpha1.Netperf) error {
 }
 
 func (h *Handler) startServerPod(cr *v1alpha1.Netperf) error {
-	serverPod := h.newNetperfPod(cr, NetperfTypeServer, v1.RestartPolicyAlways, []string{})
+	serverPod := h.newNetperfPod(cr, netperfTypeServer, v1.RestartPolicyAlways, []string{})
 
 	err := sdk.Create(serverPod)
 	if err != nil && !errors.IsAlreadyExists(err) {
@@ -102,19 +105,19 @@ func (h *Handler) startServerPod(cr *v1alpha1.Netperf) error {
 	return nil
 }
 
-func (h *Handler) getNetperfPodAffinity(cr *v1alpha1.Netperf, netperfType string) *v1.Affinity {
-	if (netperfType == NetperfTypeClient && cr.Spec.ClientNode == "") ||
-		(netperfType == NetperfTypeServer && cr.Spec.ServerNode == "") {
+func (h *Handler) getNetperfPodAffinity(cr *v1alpha1.Netperf, npType netperfType) *v1.Affinity {
+	if (npType == netperfTypeClient && cr.Spec.ClientNode == "") ||
+		(npType == netperfTypeServer && cr.Spec.ServerNode == "") {
 		return nil
 	}
 
 	nodeName := ""
-	if netperfType == NetperfTypeClient {
+	if npType == netperfTypeClient {
 		nodeName = cr.Spec.ClientNode
-	} else if netperfType == NetperfTypeServer {
+	} else if npType == netperfTypeServer {
 		nodeName = cr.Spec.ServerNode
 	} else {
-		logrus.Errorf("Unexpected netperf pod type %s. This should never happen", netperfType)
+		logrus.Errorf("Unexpected netperf pod type %s. This should never happen", npType)
 	}
 	return &v1.Affinity{
 		NodeAffinity: &v1.NodeAffinity{
@@ -135,25 +138,25 @@ func (h *Handler) getNetperfPodAffinity(cr *v1alpha1.Netperf, netperfType string
 	}
 }
 
-func (h *Handler) getNetperfPodName(cr *v1alpha1.Netperf, netperfType string) string {
+func (h *Handler) getNetperfPodName(cr *v1alpha1.Netperf, npType netperfType) string {
 	var name string
 	guidString := fmt.Sprint(cr.UID)
 	suffix := strings.Split(guidString, "-")[4]
-	switch netperfType {
-	case NetperfTypeClient:
+	switch npType {
+	case netperfTypeClient:
 		name = "netperf-client-" + suffix
-	case NetperfTypeServer:
+	case netperfTypeServer:
 		name = "netperf-server-" + suffix
 	}
 	return name
 }
 
-func (h *Handler) newNetperfPod(cr *v1alpha1.Netperf, netperfType string, restartPolicy v1.RestartPolicy, command []string) *v1.Pod {
-	name := h.getNetperfPodName(cr, netperfType)
-	affinity := h.getNetperfPodAffinity(cr, netperfType)
+func (h *Handler) newNetperfPod(cr *v1alpha1.Netperf, npType netperfType, restartPolicy v1.RestartPolicy, command []string) *v1.Pod {
+	name := h.getNetperfPodName(cr, npType)
+	affinity := h.getNetperfPodAffinity(cr, npType)
 	labels := map[string]string{
 		"app":          "netperf-operator",
-		"netperf-type": netperfType,
+		"netperf-type": fmt.Sprint(npType),
 	}
 	pod := &v1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -176,7 +179,7 @@ func (h *Handler) newNetperfPod(cr *v1alpha1.Netperf, netperfType string, restar
 			Containers: []v1.Container{
 				{
 					Name:    name,
-					Image:   "alectolytic/netperf",
+					Image:   netperfImage,
 					Command: command,
 				},
 			},
@@ -306,6 +309,7 @@ func (h *Handler) getLogFromClientPod(pod *v1.Pod) string {
 	if err != nil {
 		logrus.Errorf("Client error: %v", err)
 	}
+	client := k8sclient.GetKubeClient()
 	logOptions := &v1.PodLogOptions{}
 	req := client.Pods(pod.Namespace).GetLogs(pod.Name, logOptions)
 	rc, err := req.Stream()
@@ -331,7 +335,7 @@ func (h *Handler) handleServerPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error 
 	}
 
 	logrus.Debugf("Creating client pod for netperf: %v", cr.Name)
-	clientPod := h.newNetperfPod(cr, NetperfTypeClient, v1.RestartPolicyOnFailure, []string{"netperf", "-H", pod.Status.PodIP})
+	clientPod := h.newNetperfPod(cr, netperfTypeClient, v1.RestartPolicyOnFailure, []string{"netperf", "-H", pod.Status.PodIP})
 	err := sdk.Create(clientPod)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logrus.Errorf("Failed to create client pod : %v", err)
