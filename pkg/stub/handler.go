@@ -4,22 +4,18 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/piontec/netperf-operator/pkg/apis/app/v1alpha1"
 
+	"github.com/operator-framework/operator-sdk/pkg/k8sclient"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 type netperfType string
@@ -292,26 +288,9 @@ func (h *Handler) getPodByName(name, namespace string) (*v1.Pod, error) {
 }
 
 func (h *Handler) getLogFromClientPod(pod *v1.Pod) string {
-	//FIXME: replace this with some call through operator SDK to use existing pooled connection
-	var kubeconfig string
-	if home := os.Getenv("HOME"); home != "" {
-		kubeconfig = filepath.Join(home, ".kube/config")
-	}
-	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		logrus.Errorf("Wrong config: %v", err)
-		cfg, err = rest.InClusterConfig()
-		if err != nil {
-			panic(err.Error())
-		}
-	}
-	client, err := corev1client.NewForConfig(cfg)
-	if err != nil {
-		logrus.Errorf("Client error: %v", err)
-	}
 	client := k8sclient.GetKubeClient()
 	logOptions := &v1.PodLogOptions{}
-	req := client.Pods(pod.Namespace).GetLogs(pod.Name, logOptions)
+	req := client.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, logOptions)
 	rc, err := req.Stream()
 	if err != nil {
 		logrus.Errorf("Client error: %v", err)
