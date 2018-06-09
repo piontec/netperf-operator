@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: netperf-operator
-          image: tailoredcloud/netperf-operator:v0.1.1-c81a230
+          image: tailoredcloud/netperf-operator:v0.1.1-742a3e1
           command:
           - netperf-operator
           imagePullPolicy: Always

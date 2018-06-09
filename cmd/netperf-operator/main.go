@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const version = "0.1.1"
+const version = "0.1.2-dev"
 
 func printVersion() {
 	logrus.Infof("Go Version: %s", runtime.Version())

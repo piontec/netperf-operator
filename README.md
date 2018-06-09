@@ -5,7 +5,13 @@ This is a simple Kubernetes Operator, that uses the legendary [netperf tool](htt
 This project is an example kubernetes operator based on [Operator Framework SDK](https://github.com/operator-framework/operator-sdk). I created it for two reasons: first one, to learn how to build an operator using the SDK, second to solve a network testing problem. 
 
 ## Installing
-*Please note:* the image build is not public yet, so currently the only way to run the operator is described in [Developers guide](#dev-guide)
+*Note:* for installation for development, check [Developers guide](#dev-guide)
+You need to deploy the controller, its Custom Resource Definition and RBAC resources:
+```bash
+kubectl create -f deploy/crd.yaml
+kubectl create -f deploy/rbac.yaml
+kubectl create -f deploy/operator.yaml
+```
 
 ## Users guide
 The controller runs tests only in a single namespace, in which the controller is deployed.
@@ -15,8 +21,13 @@ apiVersion: "app.example.com/v1alpha1"
 kind: "Netperf"
 metadata:
   name: "example"
+spec:
+  serverNode: "minikube"
+  clientNode: "minikube"
 ```
 Wait for the Netperf object to complete (`status: Done`) and check the measured throughput.
+
+If you skip any of the `serverNode` or `clientNode` in `spec:`, they will be normally chosen and assigned by kube's scheduler. If you configure them, node affinity will be used to run on the specific node.
 
 ## <a name="dev-guide"></a> Developers guide
 There are 2 ways you can build and run the operator:

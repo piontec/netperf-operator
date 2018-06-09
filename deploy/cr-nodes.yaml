@@ -1,0 +1,7 @@
+apiVersion: "app.example.com/v1alpha1"
+kind: "Netperf"
+metadata:
+  name: "example"
+spec:
+  serverNode: "minikube"
+  clientNode: "minikube"
