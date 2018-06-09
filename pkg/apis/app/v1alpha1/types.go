@@ -7,8 +7,9 @@ import (
 const (
 	NetperfPhaseInitial = ""
 	NetperfPhaseServer  = "Created server pod"
-	NetperfPhaseTest    = "Created client pod"
+	NetperfPhaseTest    = "Started test"
 	NetperfPhaseDone    = "Done"
+	NetperfPhaseError   = "Test finished with error"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

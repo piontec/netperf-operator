@@ -58,8 +58,7 @@ func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {
 }
 
 func (h *Handler) deleteNetperfPods(cr *v1alpha1.Netperf) error {
-	//TODO: implement
-	logrus.Fatalf("deleteNetperfPods Not implemented")
+	logrus.Debugf("Netperf object %s/%s is being deleted", cr.Namespace, cr.Name)
 	return nil
 }
 
@@ -193,19 +192,28 @@ func (h *Handler) registerNetperfServer(cr *v1alpha1.Netperf, serverPod *v1.Pod)
 	return sdk.Update(c)
 }
 
-func (h *Handler) handlePodUpdateEvent(pod *v1.Pod) error {
-	logrus.Debugf("Trying to bind the pod %s with CR", pod.Name)
+func (h *Handler) getNetperfByName(name, namespace string) (*v1alpha1.Netperf, error) {
 	cr := &v1alpha1.Netperf{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Netperf",
 			APIVersion: "app.example.com/v1alpha1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      pod.OwnerReferences[0].Name,
-			Namespace: pod.Namespace,
+			Name:      name,
+			Namespace: namespace,
 		},
 	}
 	if err := sdk.Get(cr); err != nil {
+		return nil, err
+	}
+	return cr, nil
+}
+
+func (h *Handler) handlePodUpdateEvent(pod *v1.Pod) error {
+	logrus.Debugf("Trying to bind the pod %s with CR", pod.Name)
+	var cr *v1alpha1.Netperf
+	var err error
+	if cr, err = h.getNetperfByName(pod.OwnerReferences[0].Name, pod.Namespace); err != nil {
 		logrus.Errorf("error trying to fetch Netperf object %s/%s defined as owner of pod %s/%s: %v",
 			pod.Namespace, pod.OwnerReferences[0].Name, pod.Namespace, pod.Name, err)
 		return nil
@@ -242,24 +250,26 @@ func (h *Handler) handleClientPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error 
 	if pod.Status.Phase == v1.PodSucceeded && cr.Status.Status != v1alpha1.NetperfPhaseDone {
 		logrus.Debugf("Test completed, parsing results")
 		res := h.getLogFromClientPod(pod)
-		lines := strings.Split(res, "\n")
-		entries := strings.Fields(lines[6])
-		throughput, convErr := strconv.ParseFloat(entries[4], 64)
+		throughput, convErr := h.parseNetperfResult(res)
 		if convErr != nil {
-			return fmt.Errorf("error trying to convert result \"%s\" to float: %v", entries[4], convErr)
+			h.updateNetperfStatus(cr, v1alpha1.NetperfPhaseError)
+			return fmt.Errorf("error trying to convert test result to float: %v", convErr)
 		}
 
 		serverPod, err := h.getPodByName(cr.Status.ServerPod, cr.Namespace)
 		if err != nil {
+			h.updateNetperfStatus(cr, v1alpha1.NetperfPhaseError)
 			logrus.Errorf("Error fetching pod %v by name: %v. Won't delete Netperf.", cr.Status.ServerPod, err)
 			return err
 		}
 		logrus.Debug("Test completed, deleting resources")
 		if err = sdk.Delete(pod); err != nil {
+			h.updateNetperfStatus(cr, v1alpha1.NetperfPhaseError)
 			logrus.Debugf("Error deleting client pod %v: %v", pod.Name, err)
 			return err
 		}
 		if err = sdk.Delete(serverPod); err != nil {
+			h.updateNetperfStatus(cr, v1alpha1.NetperfPhaseError)
 			logrus.Debugf("Error deleting server pod %v: %v", serverPod.Name, err)
 			return err
 		}
@@ -270,6 +280,18 @@ func (h *Handler) handleClientPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error 
 	}
 
 	return nil
+}
+
+func (h *Handler) updateNetperfStatus(resource *v1alpha1.Netperf, status string) error {
+	netperf := resource.DeepCopy()
+	netperf.Status.Status = v1alpha1.NetperfPhaseDone
+	return sdk.Update(netperf)
+}
+
+func (h *Handler) parseNetperfResult(result string) (float64, error) {
+	lines := strings.Split(result, "\n")
+	entries := strings.Fields(lines[6])
+	return strconv.ParseFloat(entries[4], 64)
 }
 
 func (h *Handler) getPodByName(name, namespace string) (*v1.Pod, error) {
@@ -298,8 +320,7 @@ func (h *Handler) getLogFromClientPod(pod *v1.Pod) string {
 	defer rc.Close()
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(rc)
-	s := buf.String()
-	return s
+	return buf.String()
 }
 
 func (h *Handler) handleServerPodEvent(cr *v1alpha1.Netperf, pod *v1.Pod) error {
