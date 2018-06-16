@@ -4,15 +4,18 @@ import (
 	"context"
 	"runtime"
 
+	"github.com/piontec/netperf-operator/pkg/netperf-operator"
+
 	sdk "github.com/operator-framework/operator-sdk/pkg/sdk"
 	k8sutil "github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
+	"github.com/piontec/netperf-operator/pkg/apis/app/realkube"
 	stub "github.com/piontec/netperf-operator/pkg/stub"
 
 	"github.com/sirupsen/logrus"
 )
 
-const version = "0.1.2-dev"
+const version = "0.1.3-dev"
 
 func printVersion() {
 	logrus.Infof("Go Version: %s", runtime.Version())
@@ -35,6 +38,6 @@ func main() {
 	logrus.Infof("Watching %s, %s, %s, %d", resource, kind, namespace, resyncPeriod)
 	sdk.Watch(resource, kind, namespace, resyncPeriod)
 	sdk.Watch("v1", "Pod", namespace, resyncPeriod)
-	sdk.Handle(stub.NewHandler())
+	sdk.Handle(stub.NewHandler(operator.NewNetperf(realkube.NewRealProvider())))
 	sdk.Run(context.TODO())
 }
