@@ -3,6 +3,7 @@
 # Netperf operator
 This is a simple Kubernetes Operator, that uses the legendary [netperf tool](https://hewlettpackard.github.io/netperf/) to run 2 pods in your cluster and measure real TCP connection throughput between them.
 This project is an example kubernetes operator based on [Operator Framework SDK](https://github.com/operator-framework/operator-sdk). I created it for two reasons: first one, to learn how to build an operator using the SDK, second to solve a network testing problem. 
+This README.md file is about how to develop, build and run the project. If you wanto to learn more about how it works and how to write Kubernetes operators/controllers, head to my [blog](https://www.tailored.cloud/kubernetes/write-a-kubernetes-controller-operator-sdk/).
 
 ## Installing
 *Note:* for installation for development, check [Developers guide](#dev-guide)
