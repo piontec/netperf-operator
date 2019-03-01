@@ -6,7 +6,8 @@ This project is an example kubernetes operator based on [Operator Framework SDK]
 This README.md file is about how to develop, build and run the project. If you wanto to learn more about how it works and how to write Kubernetes operators/controllers, head to my [blog](https://www.tailored.cloud/kubernetes/write-a-kubernetes-controller-operator-sdk/).
 
 ## Installing
-*Note:* for installation for development, check [Developers guide](#dev-guide)
+*Note: for installation for development, check [Developers guide](#dev-guide)*
+
 You need to deploy the controller, its Custom Resource Definition and RBAC resources:
 ```bash
 kubectl create -f deploy/crd.yaml
